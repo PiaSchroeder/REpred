@@ -1,0 +1,9 @@
+# Python misc
+.ipynb_checkpoints/
+__pycache__/
+
+# Data folder
+data/
+
+# API keys
+/keys.py
