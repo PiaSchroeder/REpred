@@ -5,14 +5,15 @@ import matplotlib.pyplot as plt
 from datetime import datetime as dt, timedelta
 import xgboost as xgb
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
-from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
+from sklearn.metrics import mean_squared_error
 
 ### Functions ###########################################################################################################
 
 def add_datetime_features(df):
-    """
+    '''
     Create time series features based on datetime components.
-    """
+    '''
+    
     df = df.copy()
     df["hour"] = df.index.hour
     df["day_of_week"] = df.index.dayofweek
@@ -27,6 +28,9 @@ def add_datetime_features(df):
 #########
 
 def train_test_split(df, split_date, target=None, plot=True):
+    '''
+    Split data into train and test set at specified split date.
+    '''
     
     if target is None:
         target = "generated_electricity"
@@ -47,6 +51,9 @@ def train_test_split(df, split_date, target=None, plot=True):
 ##########
 
 def run_baseline_xgboost(train, test, n_estimators=2000, learning_rate=0.01, max_depth=6, target=None):
+    '''
+    Fit basic model (pre parameter tuning) to check feature importance.
+    '''
     
     if target is None:
         target = "generated_electricity"
@@ -72,30 +79,60 @@ def run_baseline_xgboost(train, test, n_estimators=2000, learning_rate=0.01, max
     reg.fit(X_train, 
             y_train,
             eval_set=[(X_train, y_train), (X_test, y_test)],
-            verbose=500)
+            verbose=0)
     
     # Predict test data
-    test_pred, rmse, mape = predict_test(test, reg, target=target)
+    # test_pred, rmse = predict_test(test, reg, target=target)
     
     # Feature importance
     feature_importance = pd.DataFrame(data=reg.feature_importances_,
                                       index=reg.feature_names_in_,
                                       columns=["importance"])
-    feature_importance.sort_values("importance").plot(kind="barh", title="Feature Importance")
+    ax = feature_importance.sort_values("importance").plot(kind="barh", title="Feature Importance")
+    ax.legend().set_visible(False)
     
     return reg, feature_importance
         
 
 ##########
 
+def data_prep(df, split_date, target=None):
+    
+    if target is None:
+        target = "generated_electricity"
+    
+    # Add datetime features
+    print("Adding datetime features... ", end="")
+    df = add_datetime_features(df)
+    print("Done!")
+    
+    # Create train/test split
+    print("Creating train/test split... ", end="")
+    df_train, df_test = train_test_split(df, split_date, target=target)
+    print("Done!")
+    
+    # Run basic model on all features to determine feature importance
+    print("Fitting base XGB... ", end="")
+    base_xgb, fi = run_baseline_xgboost(df_train, df_test, target=target)
+    print("Done!")
+    
+    return df_train, df_test, base_xgb, fi
+
+
+##########
+
 def run_cv_xgboost(df, features, param_search, target=None):
+    '''
+    Run grid search with cross validation to optimise parameters.
+    '''
     
     if target is None:
         target = "generated_electricity"
 
-    # Use 90 days as test split size. With 5 cv folds and 1 eval set this adds up to ~2 years 
-    # split_size = 120 
-    split_size = 30
+    split_size = 30 
+    n_splits = 5    
+    
+    # Create training and validation set
     split_date = df.index.max() - timedelta(days=split_size)
     cv_train = df.loc[df.index < split_date].copy()
     cv_val = df.loc[df.index >= split_date].copy()
@@ -105,22 +142,34 @@ def run_cv_xgboost(df, features, param_search, target=None):
 
     reg = xgb.XGBRegressor(early_stopping_rounds=50, random_state=123)
     
-    tscv = TimeSeriesSplit(n_splits=3, test_size=24*split_size)
+    tscv = TimeSeriesSplit(n_splits=n_splits, test_size=24*split_size)
     gsearch = GridSearchCV(estimator=reg, 
                            cv=tscv,
                            param_grid=param_search,
                            scoring="neg_root_mean_squared_error",
-                           verbose=100)
+                           verbose=0)
 
-    print("Running cross validation...")
-    gsearch.fit(X_train, y_train, eval_set=[(X_train, y_train),(X_val, y_val)],
-                verbose=500)
+    # Run grid search
+    print("Running cross validated grid search...", end="")
+    gsearch.fit(X_train, 
+                y_train, 
+                eval_set=[(X_train, y_train),(X_val, y_val)], 
+                verbose=0)
     print("Done!")
-
-    print("Fitting winning model to entire training set")
+    
+    # Display winning model parameters
     winning_model = gsearch.best_estimator_
-    winning_model.fit(X_train, y_train, eval_set=[(X_train, y_train),(X_val, y_val)],
-                verbose=100)
+    winning_params = winning_model.get_params()
+    print("Winning model parameters:")
+    for param in param_search.keys():
+        print(f"{param}: {winning_params[param]}")
+    
+    # Refit best model on entire training set (without CV splits)
+    print("Fitting winning model to entire training set...", end="")
+    winning_model.fit(X_train, 
+                      y_train, 
+                      eval_set=[(X_train, y_train),(X_val, y_val)],
+                      verbose=0)
     print("Done!")
 
     return winning_model
@@ -128,7 +177,10 @@ def run_cv_xgboost(df, features, param_search, target=None):
 
 ##########
 
-def predict_test(df, model, compute_error=False, target=None):
+def predict_test(df, model, compute_error=True, target=None):
+    '''
+    Predict held-out test set. Returns test df with added column "prediction" and, optionally, a prediction score (RMSE).
+    '''
     
     if target is None:
         target = "generated_electricity"
@@ -141,52 +193,63 @@ def predict_test(df, model, compute_error=False, target=None):
     
     if compute_error:
         rsme = np.sqrt(mean_squared_error(df[target], df["prediction"]))
-        mape = mean_absolute_percentage_error(df[target], df["prediction"])
         print(f"RSME = {rsme:0.2f}")
-        print(f"MAPE = {mape:0.2f}")
     else:
         rsme = None
-        mape = None
     
-    return df, rsme, mape
+    return df, rsme
 
 
 ##########
 
-def plot_predictions(df, test_df, start, end, target=None):
-    
+def plot_predictions(true_df, pred_df, start=None, end=None, target=None):
+    '''
+    Plot true data and predictions for the entire time period and, optionally, a period defined by start and end (YYYY-MM-DD format).
+    '''
+
     if target is None:
         target = "generated_electricity"
         
     # All data
-    ax = df[target].plot(figsize=(15,5))
-    test_df["prediction"].plot(ax=ax)
-    ax.set_title("Raw data and predictions")
-    plt.legend(["True data", "Prediction"])
-    plt.show()
-    
-    # Time period specified by start and end (must be valid dates)
-    ax = df.loc[(df.index > start) & (df.index < end), [target]].plot(figsize=(15,5))
-    test_df.loc[(test_df.index > start) & (test_df.index < end), ["prediction"]].plot(ax=ax)
-    ax.set_title(f"{start} - {end}")
-    plt.legend(["True data", "Prediction"])
-    plt.show()
-    
-def plot_predictions_2(true_df, pred_df, start, end, linestyle='-'):
-    
-    # Time period specified by start and end (must be valid dates)
-    ax = true_df.loc[(true_df.index >= start) & (true_df.index < end)].plot(figsize=(15,5), color="#093d91", lw=2)
-    pred_df.loc[(pred_df.index >= start) & (pred_df.index < end)].plot(ax=ax, color="#fcb03d", lw=2, style=linestyle)
-    # ax.set_title(f"{start} - {end}")
-    plt.legend(["True data", "Prediction"])
-    plt.legend(bbox_to_anchor=(1.02, 0.5), loc='center left')
-    
-    # Remove all spines
-    # for spine in ax.spines.values():
-    #     spine.set_visible(False)
+    ax = true_df[target].plot(figsize=(15,5), color="#093d91")
+    pred_df["prediction"].plot(ax=ax, color="#fcb03d")
+    plt.legend(["True data", "Prediction"], bbox_to_anchor=(1.02, 0.5), loc='center left')
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-        
     plt.show()
+    
+    # Time period specified by start and end (must be valid dates)
+    if (start is not None) and (end is not None):
+        ax = true_df.loc[(true_df.index >= start) & (true_df.index < end), [target]].plot(figsize=(15,5), color="#093d91", lw=2)
+        pred_df.loc[(pred_df.index >= start) & (pred_df.index < end), ["prediction"]].plot(ax=ax, color="#fcb03d", lw=2)
+        plt.legend(["True data", "Prediction"], bbox_to_anchor=(1.02, 0.5), loc='center left')
+        ax.spines['left'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        plt.show()
+    
+
+##########
+
+def run_grid_search(df, df_train, df_test, features, params, target=None):
+    
+    if target is None:
+        target = "generated_electricity"
+    
+    # Run cross-validated grid search
+    best_model = run_cv_xgboost(df_train, features, params, target=target)
+    
+    # Predict held-out test data with best model from grid search
+    print("Predicting held-out test set... ", end="")
+    df_test, rmse = predict_test(df_test, best_model, target=target)
+    print("Done!")
+    
+    # Plot prediction (Entire period + last 30 days)
+    plot_start = (df_test.index[-1]-timedelta(days=30)).strftime("%Y-%m-%d")
+    plot_end = df_test.index[-1].strftime("%Y-%m-%d")
+    plot_predictions(df, df_test, start=plot_start, end=plot_end, target=target)
+    
+    return best_model, df_test, rmse    
+
 

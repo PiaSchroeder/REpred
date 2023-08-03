@@ -223,8 +223,8 @@ def aggregate_data(MaStR_df, weather_df, gen_df=None, plot=False):
     # Compute cumulative capacity
     MaStR_df = MaStR_df.set_index("Inbetriebnahmedatum").sort_index()
     capacity_df = pd.DataFrame(index=weather_df.index)
-    if MaStR_df.index.max() > capacity_df.index.min():
-        capacity_df["cumulative_capacity"] = MaStR_df["InstallierteLeistung"].sum()
+    if MaStR_df.index.max() < capacity_df.index.min():
+        capacity_df["cumulative_capacity"] = MaStR_df["InstallierteLeistung"].sum()/1000
     else:
         capacity_df["cumulative_capacity"] = MaStR_df["InstallierteLeistung"].resample("H").sum().cumsum()/1000
         capacity_df["cumulative_capacity"] = capacity_df["cumulative_capacity"].fillna(method="ffill")        

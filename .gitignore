@@ -2,8 +2,9 @@
 .ipynb_checkpoints/
 __pycache__/
 
-# Data folder
+# Data folders etc.
 data/
+base_models/
 
 # API keys
 /keys.py
