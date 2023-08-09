@@ -29,6 +29,16 @@ def clean_consumption(df, ref_df):
     
     df = df.copy()
     
+    # Quick fix for different languages returned by smard
+    df = df.rename(columns={\
+        "Datum":"Date", 
+        "Anfang":"Start", 
+        "Ende":"End",
+        "Gesamt (Netzlast) [MWh] Berechnete Auflösungen":"Gesamt (Netzlast) [MWh] Calculated resolutions",
+        "Residuallast [MWh] Berechnete Auflösungen":"Residuallast [MWh] Calculated resolutions",
+        "Pumpspeicher [MWh] Berechnete Auflösungen":"Pumpspeicher [MWh] Calculated resolutions",
+    })
+    
     # Make datetime index (for completeness, but see next step)
     df["datetime"] = df[["Date", "Start"]].agg('T'.join, axis=1)
     df["datetime"] = pd.to_datetime(df["datetime"], format="%d.%m.%YT%H:%M")
@@ -217,7 +227,7 @@ def preprocess_plot_df(df):
 
 def aggregate_data(MaStR_df, weather_df, gen_df=None, plot=False):
     '''
-    Compute cumulative capacity and aggregate capacity, weather, and generations data frames (creates final data frames for further analysis).
+    Compute cumulative capacity and aggregate capacity, weather, and generation data frames (creates final data frames for prediction).
     '''
     
     # Compute cumulative capacity
@@ -229,7 +239,7 @@ def aggregate_data(MaStR_df, weather_df, gen_df=None, plot=False):
         capacity_df["cumulative_capacity"] = MaStR_df["InstallierteLeistung"].resample("H").sum().cumsum()/1000
         capacity_df["cumulative_capacity"] = capacity_df["cumulative_capacity"].fillna(method="ffill")        
     
-    
+    # Add electricity generation data
     if gen_df is not None:
         
         # Rename generation column

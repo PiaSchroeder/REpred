@@ -1,10 +1,11 @@
 # Python misc
+.idea/
 .ipynb_checkpoints/
 __pycache__/
 
 # Data folders etc.
 data/
-base_models/
+models/
 
 # API keys
 /keys.py

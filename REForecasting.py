@@ -39,11 +39,14 @@ def train_test_split(df, split_date, target=None, plot=True):
     test = df.loc[df.index >= split_date].copy()
 
     if plot:
-        fig, ax = plt.subplots(figsize=(9,3))
-        train[target].plot(ax=ax, title="Train/Test Split")
-        test[target].plot(ax=ax)
+        fig, ax = plt.subplots(figsize=(8,2))
+        train[target].plot(ax=ax, title="Train/Test Split", color="#093d91")
+        test[target].plot(ax=ax, color="#fcb03d")
         ax.axvline(pd.Period(split_date, freq='H'), color="black", ls="--")
-        ax.legend(["Training set", "Test set"])
+        plt.legend(["Training set", "Test set"], bbox_to_anchor=(1.02, 0.5), loc='center left')
+        ax.spines['left'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         
     return train, test
 
@@ -81,22 +84,17 @@ def run_baseline_xgboost(train, test, n_estimators=2000, learning_rate=0.01, max
             eval_set=[(X_train, y_train), (X_test, y_test)],
             verbose=0)
     
-    # Predict test data
-    # test_pred, rmse = predict_test(test, reg, target=target)
-    
     # Feature importance
     feature_importance = pd.DataFrame(data=reg.feature_importances_,
                                       index=reg.feature_names_in_,
                                       columns=["importance"])
-    ax = feature_importance.sort_values("importance").plot(kind="barh", title="Feature Importance")
-    ax.legend().set_visible(False)
     
     return reg, feature_importance
         
 
 ##########
 
-def data_prep(df, split_date, target=None):
+def data_prep(df, split_date, fit_base=True, fi=None, target=None):
     
     if target is None:
         target = "generated_electricity"
@@ -112,10 +110,18 @@ def data_prep(df, split_date, target=None):
     print("Done!")
     
     # Run basic model on all features to determine feature importance
-    print("Fitting base XGB... ", end="")
-    base_xgb, fi = run_baseline_xgboost(df_train, df_test, target=target)
-    print("Done!")
+    if fit_base:
+        print("Fitting base XGB... ", end="")
+        base_xgb, fi = run_baseline_xgboost(df_train, df_test, target=target)
+        print("Done!")
+    else:
+        base_xgb = None
     
+    # Plot feature importance
+    if fi is not None:
+        ax = fi.sort_values("importance").plot(kind="barh", title="Feature Importance", color="#093d91")
+        ax.legend().set_visible(False)
+        
     return df_train, df_test, base_xgb, fi
 
 
@@ -130,7 +136,7 @@ def run_cv_xgboost(df, features, param_search, target=None):
         target = "generated_electricity"
 
     split_size = 30 
-    n_splits = 5    
+    n_splits = 3    
     
     # Create training and validation set
     split_date = df.index.max() - timedelta(days=split_size)
@@ -147,13 +153,13 @@ def run_cv_xgboost(df, features, param_search, target=None):
                            cv=tscv,
                            param_grid=param_search,
                            scoring="neg_root_mean_squared_error",
-                           verbose=0)
+                           verbose=3)
 
     # Run grid search
-    print("Running cross validated grid search...", end="")
+    print("Running cross validated grid search...")
     gsearch.fit(X_train, 
                 y_train, 
-                eval_set=[(X_train, y_train),(X_val, y_val)], 
+                eval_set=[(X_train, y_train),(X_val, y_val)],
                 verbose=0)
     print("Done!")
     
@@ -211,7 +217,7 @@ def plot_predictions(true_df, pred_df, start=None, end=None, target=None):
         target = "generated_electricity"
         
     # All data
-    ax = true_df[target].plot(figsize=(15,5), color="#093d91")
+    ax = true_df[target].plot(figsize=(8,2), color="#093d91")
     pred_df["prediction"].plot(ax=ax, color="#fcb03d")
     plt.legend(["True data", "Prediction"], bbox_to_anchor=(1.02, 0.5), loc='center left')
     ax.spines['left'].set_visible(False)
@@ -221,7 +227,7 @@ def plot_predictions(true_df, pred_df, start=None, end=None, target=None):
     
     # Time period specified by start and end (must be valid dates)
     if (start is not None) and (end is not None):
-        ax = true_df.loc[(true_df.index >= start) & (true_df.index < end), [target]].plot(figsize=(15,5), color="#093d91", lw=2)
+        ax = true_df.loc[(true_df.index >= start) & (true_df.index < end), [target]].plot(figsize=(8,2), color="#093d91", lw=2)
         pred_df.loc[(pred_df.index >= start) & (pred_df.index < end), ["prediction"]].plot(ax=ax, color="#fcb03d", lw=2)
         plt.legend(["True data", "Prediction"], bbox_to_anchor=(1.02, 0.5), loc='center left')
         ax.spines['left'].set_visible(False)
@@ -251,5 +257,32 @@ def run_grid_search(df, df_train, df_test, features, params, target=None):
     plot_predictions(df, df_test, start=plot_start, end=plot_end, target=target)
     
     return best_model, df_test, rmse    
+
+
+##########
+
+def make_forecast(test_df, model, true_df=None, plot_start=None, plot_end=None, target=None):
+    '''
+    Use trained model to predict generation data based on features in test_df. If true_df is passed, predicted and actual generation data will 
+    be plotted.
+    '''
+    
+    if target is None:
+        target = "generated_electricity"
+        
+    test_df = test_df.copy()
+    
+    # Add/remove features
+    test_df = add_datetime_features(test_df)
+    test_df = test_df[list(model.feature_names_in_)].copy()
+    
+    # Make prediction
+    test_df, rmse = predict_test(test_df, model, compute_error=False)
+    
+    # Plot true vs. predicted data
+    if true_df is not None:
+        plot_predictions(true_df, test_df, start=plot_start, end=plot_end, target=target)
+    
+    return test_df
 
 
