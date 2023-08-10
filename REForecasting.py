@@ -55,7 +55,7 @@ def train_test_split(df, split_date, target=None, plot=True):
 
 def run_baseline_xgboost(train, test, n_estimators=2000, learning_rate=0.01, max_depth=6, target=None):
     '''
-    Fit basic model (pre parameter tuning) to check feature importance.
+    Fit basic model (pre parameter tuning) to determine feature importance.
     '''
     
     if target is None:
@@ -95,6 +95,9 @@ def run_baseline_xgboost(train, test, n_estimators=2000, learning_rate=0.01, max
 ##########
 
 def data_prep(df, split_date, fit_base=True, fi=None, target=None):
+    '''
+    Add datetime features, create train/test split, fit base model, and plot feature importance.
+    '''
     
     if target is None:
         target = "generated_electricity"
@@ -239,6 +242,9 @@ def plot_predictions(true_df, pred_df, start=None, end=None, target=None):
 ##########
 
 def run_grid_search(df, df_train, df_test, features, params, target=None):
+    '''
+    Run grid-search, predict test set, and plot prediction against true data.
+    '''
     
     if target is None:
         target = "generated_electricity"

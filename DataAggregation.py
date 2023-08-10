@@ -12,7 +12,7 @@ from sklearn.cluster import KMeans
 LAT_LENGTH = 111.
 LON_LENGTH = 67.
 
-# Taken from Agorameter documentation
+# Taken from Agorameter documentation (https://www.agora-energiewende.de/veroeffentlichungen/agorameter-dokumentation/)
 emission_factors = {
     "Fossil Brown coal/Lignite": 1.09,
     "Fossil Gas": 0.37,
