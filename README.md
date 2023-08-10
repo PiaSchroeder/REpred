@@ -6,6 +6,8 @@ Main workflow is implemented in Jupyter Notebooks (for details see below):
  - RE_model_fitting: Fit models to historical data (XGBoost)
  - RE_prediction: Make forecast
 
+![image](https://github.com/PiaSchroeder/REpred/assets/45008571/647543de-d8d8-47e9-b94c-949e6f3ab653)
+
 ### Data sources
 - Historical generation and price data: entso-e (European Network of Transmission System Operators for Electricity) transparency platform (https://transparency.entsoe.eu/) via the python client for the entso-e API (https://github.com/EnergieID/entsoe-py)
 - Consumption data: Bundesnetzagentur (https://www.smard.de/home/downloadcenter/download-marktdaten/)
