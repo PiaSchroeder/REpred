@@ -8,6 +8,8 @@ Main workflow is implemented in Jupyter Notebooks (for details see below):
 
 ![example](https://github.com/PiaSchroeder/REpred/assets/45008571/41b536af-4c53-4eb2-8051-c31512eb3865)
 
+Note: The electricity price is influenced by electricity supply throughout Germany as well as geopolitical events, meaning that the accuracy of price forecasts based on energy production in the 50 Hertz area alone is limited.
+
 ### Data sources
 - Historical generation and price data: entso-e (European Network of Transmission System Operators for Electricity) transparency platform (https://transparency.entsoe.eu/) via the python client for the entso-e API (https://github.com/EnergieID/entsoe-py)
 - Consumption data: Bundesnetzagentur (https://www.smard.de/home/downloadcenter/download-marktdaten/)
